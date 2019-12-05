@@ -153,7 +153,7 @@ class TFNet(object):
 		if self.FLAGS.summary:
 			self.writer.add_graph(self.sess.graph)
 
-	def savepb(self):
+	def savepb(self, save_path=None):
 		"""
 		Create a standalone const graph def that 
 		C++	can load and run.
@@ -167,10 +167,12 @@ class TFNet(object):
 		tfnet_pb = TFNet(flags_pb, darknet_pb)		
 		tfnet_pb.sess = tf.Session(graph = tfnet_pb.graph)
 		# tfnet_pb.predict() # uncomment for unit testing
-		name = 'built_graph/{}.pb'.format(self.meta['name'])
+		if save_path is None:
+			save_path = 'built_graph'
+		name = os.path.join(save_path, '{}.pb'.format(self.meta['name']))
 		os.makedirs(os.path.dirname(name), exist_ok=True)
 		#Save dump of everything in meta
-		with open('built_graph/{}.meta'.format(self.meta['name']), 'w') as fp:
+		with open(os.path.join(save_path, '{}.meta'.format(self.meta['name'])), 'w') as fp:
 			json.dump(self.meta, fp)
 		self.say('Saving const graph def to {}'.format(name))
 		graph_def = tfnet_pb.sess.graph_def
