@@ -1,5 +1,6 @@
 import tensorflow as tf
 import time
+import shutil
 from . import help
 from . import flow
 from .ops import op_create, identity
@@ -91,9 +92,9 @@ class TFNet(object):
 		self.framework = create_framework(self.meta, self.FLAGS)
 
 		# Placeholders
-		self.inp = tf.get_default_graph().get_tensor_by_name('input:0')
+		self.inp = tf.compat.v1.get_default_graph().get_tensor_by_name('input:0')
 		self.feed = dict() # other placeholders
-		self.out = tf.get_default_graph().get_tensor_by_name('output:0')
+		self.out = tf.compat.v1.get_default_graph().get_tensor_by_name('output:0')
 		
 		self.setup_meta_ops()
 	
@@ -102,7 +103,7 @@ class TFNet(object):
 
 		# Placeholders
 		inp_size = [None] + self.meta['inp_size']
-		self.inp = tf.placeholder(tf.float32, inp_size, 'input')
+		self.inp = tf.compat.v1.placeholder(tf.float32, inp_size, 'input')
 		self.feed = dict() # other placeholders
 
 		# Build the forward pass
@@ -142,18 +143,18 @@ class TFNet(object):
 			self.summary_op = tf.summary.merge_all()
 			self.writer = tf.summary.FileWriter(self.FLAGS.summary + 'train')
 		
-		self.sess = tf.Session(config = tf.ConfigProto(**cfg))
-		self.sess.run(tf.global_variables_initializer())
+		self.sess = tf.compat.v1.Session(config = tf.compat.v1.ConfigProto(**cfg))
+		self.sess.run(tf.compat.v1.global_variables_initializer())
 
 		if not self.ntrain: return
-		self.saver = tf.train.Saver(tf.global_variables(), 
+		self.saver = tf.compat.v1.train.Saver(tf.compat.v1.global_variables(), 
 			max_to_keep = self.FLAGS.keep)
 		if self.FLAGS.load != 0: self.load_from_ckpt()
 		
 		if self.FLAGS.summary:
 			self.writer.add_graph(self.sess.graph)
 
-	def savepb(self, save_path=None):
+	def savepb(self, save_path=None, to_saved_model=False):
 		"""
 		Create a standalone const graph def that 
 		C++	can load and run.
@@ -165,15 +166,47 @@ class TFNet(object):
 		flags_pb.train = False
 		# rebuild another tfnet. all const.
 		tfnet_pb = TFNet(flags_pb, darknet_pb)		
-		tfnet_pb.sess = tf.Session(graph = tfnet_pb.graph)
+		tfnet_pb.sess = tf.compat.v1.Session(graph = tfnet_pb.graph)
 		# tfnet_pb.predict() # uncomment for unit testing
 		if save_path is None:
 			save_path = 'built_graph'
-		name = os.path.join(save_path, '{}.pb'.format(self.meta['name']))
-		os.makedirs(os.path.dirname(name), exist_ok=True)
-		#Save dump of everything in meta
-		with open(os.path.join(save_path, '{}.meta'.format(self.meta['name'])), 'w') as fp:
-			json.dump(self.meta, fp)
-		self.say('Saving const graph def to {}'.format(name))
 		graph_def = tfnet_pb.sess.graph_def
-		tf.train.write_graph(graph_def,'./', name, False)
+
+		if to_saved_model is True:
+			# remove old saved model
+			if os.path.exists(save_path):
+				shutil.rmtree(save_path)
+			# init builder
+			builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(save_path)
+			sigs = {}
+			with tf.compat.v1.Session(graph=tf.compat.v1.Graph()) as sess:
+				# name="" is important to ensure we don't get spurious prefixing
+				tf.import_graph_def(graph_def, name="")
+				g = tf.compat.v1.get_default_graph()
+
+				inp = g.get_tensor_by_name("input:0")
+				out = g.get_tensor_by_name("output:0")
+
+				sigs["serving_default"] = \
+					tf.compat.v1.saved_model.predict_signature_def(
+						{"input": inp},
+						{"output": out}
+					)
+
+				builder.add_meta_graph_and_variables(sess,
+													["serve"],
+													signature_def_map=sigs)
+
+			# save model
+			builder.save()
+			# dump model meta
+			with open(os.path.join(save_path, 'model.meta'), 'w') as fp:
+				json.dump(self.meta, fp)
+		else:
+			name = os.path.join(save_path, '{}.pb'.format(self.meta['name']))
+			os.makedirs(os.path.dirname(name), exist_ok=True)
+			#Save dump of everything in meta
+			with open(os.path.join(save_path, '{}.meta'.format(self.meta['name'])), 'w') as fp:
+				json.dump(self.meta, fp)
+			self.say('Saving const graph def to {}'.format(name))
+			tf.train.write_graph(graph_def,'./', name, False)
