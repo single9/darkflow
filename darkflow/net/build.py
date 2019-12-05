@@ -13,14 +13,14 @@ import os
 class TFNet(object):
 
 	_TRAINER = dict({
-		'rmsprop': tf.train.RMSPropOptimizer,
-		'adadelta': tf.train.AdadeltaOptimizer,
-		'adagrad': tf.train.AdagradOptimizer,
-		'adagradDA': tf.train.AdagradDAOptimizer,
-		'momentum': tf.train.MomentumOptimizer,
-		'adam': tf.train.AdamOptimizer,
-		'ftrl': tf.train.FtrlOptimizer,
-		'sgd': tf.train.GradientDescentOptimizer
+		'rmsprop': tf.compat.v1.train.RMSPropOptimizer,
+		'adadelta': tf.compat.v1.train.AdadeltaOptimizer,
+		'adagrad': tf.compat.v1.train.AdagradOptimizer,
+		'adagradDA': tf.compat.v1.train.AdagradDAOptimizer,
+		'momentum': tf.compat.v1.train.MomentumOptimizer,
+		'adam': tf.compat.v1.train.AdamOptimizer,
+		'ftrl': tf.compat.v1.train.FtrlOptimizer,
+		'sgd': tf.compat.v1.train.GradientDescentOptimizer
 	})
 
 	# imported methods
@@ -79,8 +79,8 @@ class TFNet(object):
 			time.time() - start))
 	
 	def build_from_pb(self):
-		with tf.gfile.FastGFile(self.FLAGS.pbLoad, "rb") as f:
-			graph_def = tf.GraphDef()
+		with tf.io.gfile.GFile(self.FLAGS.pbLoad, "rb") as f:
+			graph_def = tf.compat.v1.GraphDef()
 			graph_def.ParseFromString(f.read())
 		
 		tf.import_graph_def(
@@ -209,4 +209,4 @@ class TFNet(object):
 			with open(os.path.join(save_path, '{}.meta'.format(self.meta['name'])), 'w') as fp:
 				json.dump(self.meta, fp)
 			self.say('Saving const graph def to {}'.format(name))
-			tf.train.write_graph(graph_def,'./', name, False)
+			tf.io.write_graph(graph_def,'./', name, False)

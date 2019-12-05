@@ -52,7 +52,7 @@ def load_old_graph(self, ckpt):
         assert val is not None, \
         'Cannot find and load {}'.format(var.name)
         shp = val.shape
-        plh = tf.placeholder(tf.float32, shp)
+        plh = tf.compat.v1.placeholder(tf.float32, shp)
         op = tf.assign(var, plh)
         self.sess.run(op, {plh: val})
 
